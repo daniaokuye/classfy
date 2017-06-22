@@ -7,7 +7,7 @@ pro subarea,hardCore
   path = 'F:\Data\test\L028.tif'
   path = 'F:\Data\test\L028_Index.tif'
   outputfile = 'D:\360Downloads\test2.tif'
-  outputfile = 'D:\360Downloads\5index\test2.tif'
+  outputfile = 'D:\360Downloads\June\test2.tif'
   subNum=6.0;分块的在行列上的次数
 
   envi_open_file, path, r_fid=fid

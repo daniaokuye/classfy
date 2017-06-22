@@ -1,14 +1,14 @@
 ;+
 ; :Function: 使用isodata方法注入核心
 ;-报文生成函数
+;abandon表示要舍弃的值，在类别影像里面
+;blocks用来控制分区，每幅图生成4个分区，分别计算他们的统计结果
+;clusterList用来保存聚类号和对应的临时文件，用于取hist直方图和delete
 ;
-PRO GenerateCore,maskFile,logFile,abandon
-;  RESOLVE_ROUTINE, ['nonWetland','staticClass','modeH',$
-  ;    'isodata','modeALL','deleteFID'],$
-  ;    /IS_FUNCTION, /NO_RECOMPILE
-  path = 'F:\Data\test\L028_Index.tif'
-  ;maskFile='F:\Data\IsoCopy\tpCode.tif'
-  ;logFile = 'D:\360Downloads\5index\log.txt'
+PRO GenerateCore,blocks,maskFile,logFile,abandon;,clusterList
+  if path eq !NULL then path = 'F:\Data\test\L028_Index.tif'
+  if maskFile eq !NULL then maskFile='F:\Data\IsoCopy\tpCode.tif'
+  if logFile eq !NULL then logFile = 'D:\360Downloads\June\log1.txt'
   ;abandon=0
   envi_open_file, path, r_fid=zzfid
   envi_file_query,zzfid,nl=nl,ns=ns,nb=nb,dims=dims
@@ -18,12 +18,12 @@ PRO GenerateCore,maskFile,logFile,abandon
 
   ;data = envi_get_data(fid=zzfid,dims=dims,pos=0)
   maskClass = envi_get_data(fid=mfid,dims=mdims,pos=0)
-  ;print,zzfid,mfid,'dims of both',dims,mdims
 
+  ;if clusterList eq !NULL then clusterList=[]
 
-  openW,lun,logFile,/GET_LUN
-  PRINTF,lun,'The image was selected to generate the core for classification:'+STRING(10b)+$
-    path
+  openW,lun,logFile,/GET_LUN,/append
+  ;PRINTF,lun,'The image was selected to generate the core for classification:'+STRING(10b)+$
+  ;  path
   ;FREE_LUN,lun
   ;classNUMs=max(maskClass);??????????????????????????;这有个恶心的7
   ;;现分类总数
@@ -41,44 +41,103 @@ PRO GenerateCore,maskFile,logFile,abandon
 
   e = ENVI()
   nameString=[]
+  ;for blocks=1,4 do begin
+  ;blocks用来控制分区，每幅图生成4个分区，分别计算他们的统计结果
   for i=0,N_ELEMENTS(classNUMs)-1 do begin
     ;openU,lun,logFile,/GET_LUN
-    PRINTF,lun,format='(/,i-,a)',classnums[i],'is the value in calculating now'
+
     ;如果i大于类的总数，开始计算影像中未被分类的ISOData特征；
     print,format='($,i)',classnums[i]
     maskData=maskClass eq classnums[i]
-    ;if i gt 7 then begin
-    ;  maskData=nonWetland(zzfid,maskData)
-    ;endif
-
-    tempFile = e.GetTemporaryFilename();掩膜文件
-    tempFile2 = e.GetTemporaryFilename();掩膜结果
-    newRaster = ENVIRaster(maskData, URI=tempFile)
-    newRaster.Save
-    Mfid = ENVIRasterToFID(newRaster)
-
-    ;    pos=indgen(nb)
-    ;    ENVI_DOIT, 'ENVI_MASK_APPLY_DOIT', DIMS=dims, FID=zzfid,$;/IN_MEMORY,
-    ;      M_FID=fid, M_POS=0, OUT_BNAME='mask',$
-    ;      OUT_NAME=tempFile2, POS=pos, R_FID=rFid , VALUE=-32768;value是背景值
-
-    isoFid = isodata(zzFid,Mfid);非监督分类结果
-    IsSaveLog = staticClass(isoFid,zzfid,lun)
-
-    ; Delete the output raster file when we're done with it
-    ;DELfid=[Mfid,isoFid];[fid,rFid]
-    ;ok=deleteFID(DELfid)
-    print,'ok-1'
-  endfor
-
-  FREE_LUN,lun
-  ;raster = data*mask
-  ;isodataFile = isodata(mask*temporary(envi_get_data(fid=zzfid,dims=dims,pos=0)))
-  ;delvar,raster
-  ;    isodataFile='D:\360Downloads\test\test_isodata.tif'
-  ;  IsSaveLog = staticClass(isodataFile,zzfid)
-  print,'ok-2'
+    clusterNum=0
+    case blocks of
+      1:begin
+      ;只保留影像左上角，其他部分设0
+      maskData[*,mnl/2:-1]=0;line below
+      maskData[mns/2:-1,*]=0;sample right
+      clusterNum=1000+classnums[i]
+    end
+    2:begin
+    ;只保留影像右上角，其他部分设0
+    maskData[*,mnl/2:-1]=0;line below
+    maskData[0:mns/2,*]=0;sample left
+    clusterNum=2000+classnums[i]
+  end
+  3:begin
+  ;只保留影像右上角，其他部分设0
+  maskData[*,0:mnl/2]=0;line upper
+  maskData[mns/2:-1,*]=0;sample right
+  clusterNum=3000+classnums[i]
 end
+4:begin
+;只保留影像右上角，其他部分设0
+maskData[*,0:mnl/2]=0;line upper
+maskData[0:mns/2,*]=0;sample left
+clusterNum=4000+classnums[i]
+end
+else:begin
+print,'please input a number between[1,4]'
+return
+end
+endcase
+PRINTF,lun,format='(/,i-,a)',clusterNum,'is the value in calculating now'
+
+
+;if i gt 7 then begin
+;  maskData=nonWetland(zzfid,maskData)
+;endif
+
+tempFile = e.GetTemporaryFilename();掩膜文件
+tempBlock = e.GetTemporaryFilename();掩膜结果
+newRaster = ENVIRaster(maskData, URI=tempFile)
+newRaster.Save
+Mskfid = ENVIRasterToFID(newRaster)
+
+;    pos=indgen(nb)
+;    ENVI_DOIT, 'ENVI_MASK_APPLY_DOIT', DIMS=dims, FID=zzfid,$;/IN_MEMORY,
+;      M_FID=fid, M_POS=0, OUT_BNAME='mask',$
+;      OUT_NAME=tempFile2, POS=pos, R_FID=rFid , VALUE=-32768;value是背景值
+
+isoFid = isodata(zzFid,Mskfid);非监督分类结果
+IsSaveLog = staticClass(isoFid,zzfid,lun)
+
+;;将聚类号和对应临时文件保存到clusterList中
+;raster = ENVIFIDToRaster(isoFid)
+;path=raster.uri
+;;raster.close
+;clusterList=[[clusterList],[string(clusterNum),path]]
+
+
+; Delete the output raster file when we're done with it
+DELfid=[Mskfid,isoFid];[fid,rFid]
+ok=deleteFID(DELfid);先删掉掩膜临时文件
+print,'ok-1'
+endfor
+;endfor
+
+FREE_LUN,lun
+;raster = data*mask
+;isodataFile = isodata(mask*temporary(envi_get_data(fid=zzfid,dims=dims,pos=0)))
+;delvar,raster
+;    isodataFile='D:\360Downloads\test\test_isodata.tif'
+;  IsSaveLog = staticClass(isodataFile,zzfid)
+print,'ok-2'
+end
+
+
+;+
+; :Description:
+;
+;-
+function obtainHist,isoList,numList
+  compile_opt idl2
+  envi_open_file, path, r_fid=fid
+  envi_file_query,fid,nl=nl,ns=ns,nb=nb,dims=dims
+
+
+  return, 1
+end
+
 
 ;+
 ; :得到一个maskdata，不属于任何一类又不包含边界:
@@ -161,11 +220,11 @@ end
 ; :isodata分类:
 ;
 ;-
-function isodata,fid,M_fid
+function isodata,fid,M_fid, NUM_CLASSES
   compile_opt idl2
   envi_file_query,fid,dims=dims,nb=nb
   ;isodata的参数
-  NUM_CLASSES = 15
+  if NUM_CLASSES eq !NULL then NUM_CLASSES = 15
   MIN_CLASSES = 3
   ITERATIONS = 10
   CHANGE_THRESH = .05

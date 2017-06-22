@@ -1,96 +1,108 @@
-pro setbackCore,logFile,reSave,core,std,extent,alist
+;+
+; :Author: DN
+;FileData -- 每隔5行（波段数）自定义一行：以区分大类（类别）如4000和小类[1-15]（亚类）
+;             格式分别为：1（一个数字），数字，位置（0或6）
+;category -- 类别，亚类，像元数，最小值，所在行。共5个数据
+;available -- 每大类中数目像元超过最多者一半以上的亚类，注意其行数等于useful数据项个数
+;core -- 影像各聚类中心组成波谱曲线;extent -- [min,max]
+;alist -- 创建available的序列列表 0,1,2,3,4……
+;alist -- 2107/6/13-alist的第一个数字变成大类了，如1000，1001
+;partial -- 用来确定全部保留还是保留部分
+;-
+pro setbackCore,core,std,extent,alist,IsPartial,logFile,reSave
   compile_opt IDL2
-  ;  RESOLVE_ROUTINE, ['fileToMat','pickColumn','StringToDoubleArray',$
-  ;    'fileread','IsDoubleString'],$
-  ;    /IS_FUNCTION, /NO_RECOMPILE
-
-  if logFile eq !NULL then logFile = 'D:\360Downloads\5index\log.txt'
-  ;logFile = 'D:\test\log_reC.txt'
-  if reSave eq !NULL then  reSave= 'D:\360Downloads\5index\FileData1.txt'
-  ;reSave= 'D:\test\FileData_reC.txt'
-
-
+  if logFile eq !NULL then logFile = 'D:\360Downloads\June\log2.txt'
+  if reSave eq !NULL then  reSave= 'D:\360Downloads\June\FileData2.txt'
+  if IsPartial eq !NULL then IsPartial=1
   FileData=fileToMat(logFile,category,classes,numsOfSec)
 
-  available=intarr(numsOfSec,N_ELEMENTS(classes));创建类别相同的行数，列数为最大的亚类数
+  available=intarr(numsOfSec+1,N_ELEMENTS(classes))-1;创建类别相同的行数，列数为最大的亚类数+1，多一列为保存大类号
   ;print,'class:',classes
   for i=0,N_ELEMENTS(classes)-1 do begin
+    ;if classes[i] mod 1000 eq 0 then CONTINUE;为了去除0所代表的背景值
     all = where(category[0,*] eq classes[i]);序数
+    ;这是经验方法，如果某聚类- 像元数- 不足15k，应该抛弃
+    if max(category[2,all]) lt 10000 then continue
+
     sort=sort(category[2,all]);面积/像元数 序数 in ascending order
     ;计算可保留序数
     keep=[classes[i],0];两维，第一个类别（大类，小类），第二个是像元数
     for j=N_ELEMENTS(sort)-1,0,-1 do begin
       line = all[sort[j]];所在行
-      min = category[3,line];最小值
-      if min eq -9999 then CONTINUE
       keep=[[keep],[category[1:2,line]]]
     endfor
-    keep[1,*]/=keep[1,1];面积必须是最大的、有效的面积的一半以上。0.5
+    if IsPartial eq 1 then keep[1,*]/=keep[1,1];面积必须是最大的、有效的面积的一半以上。0.5,且读入时已为浮点数
+    if IsPartial eq 0 then keep[1,1:-1] =1.0;即全部保留
     leaves=where(keep[1,*] gt 0.5);暂定0.5
-    available[0:leaves[-1],i]=keep[0,0:leaves[-1]]
+    available[0:leaves[-1],i]=keep[0,0:leaves[-1]];多一列keep[0]保存着大类代号
   endfor
+  ;  useful=where(available[0,*] gt 0);意欲去掉0大类，影像空值也需要保留一类的
+  ;  available=available[*,useful]
+
   nb=category[-1,1]-category[-1,0];波段数目nb
 
-  core=[];
+  core=[];影像各聚类中心组成波谱曲线
   extent=[];
   std=[];
-  for i=0,N_ELEMENTS(classes)-1 do begin;(size(available,/DIMENSIONS))[1]
-    gtZero = where(available[*,i] gt 0,count)
-    for j=1,max(gtZero) do begin;将所有有效亚类罗列起来
+  for i=0,N_ELEMENTS(available[0,*])-1 do begin;(size(available,/DIMENSIONS))[1]
+    gtZero = where(available[*,i] gt -1,count);j从1开始的
+    for j=1,max(gtZero) do begin
+      ;将所有有效亚类罗列起来，筛选结果放入indexLine
       indexLine = where(category[0,*] eq available[0,i] and category[1,*] eq available[j,i])
-      line = category[-1,indexLine]
+      line = category[-1,indexLine];fileData中对应行号
       core=[[core],[TRANSPOSE(FileData[2,line+1:line+nb-1])]];先用mean来代替core
-      extent=[[extent],[TRANSPOSE(FileData[1,line+1:line+nb-1])]]; [[],[]]
-      extent=[[extent],[TRANSPOSE(FileData[0,line+1:line+nb-1])]]
+      extent=[[extent],[TRANSPOSE(FileData[1,line+1:line+nb-1])]]; [[],[]]max
+      extent=[[extent],[TRANSPOSE(FileData[0,line+1:line+nb-1])]];min
       std=[[std],[TRANSPOSE(FileData[3,line+1:line+nb-1])]]
     endfor
   endfor
-  
-  ;创建available的序列列表
+
+  ;创建available的序列列表 0,1,2,3,4……
   alist=list()
   number=1
   for i=0,(size(available))[2]-1 do begin
-    av=where(available[*,i] gt 0,count)
-    alist.Add,indgen(count-1)+number
+    av=where(available[*,i] gt -1,count)
+    ;if count then begin
+    ;print ,format='($,a)',count
+    alist.Add,[available[0,i],indgen(count-1)+number]
     number+=(count-1)
+    ;endif
   endfor
-  
+
   ;  ;统计表格的重新读入与编码
   openW,lun,reSave,/GET_LUN
   PRINTF,lun,'\n1.this is FileData one\n'
   PRINTF,lun,format='(6(g,:,","))',FileData
-  ;FREE_LUN,lun
-  ;
+
+
   ;所有亚类及其参数
-  ;arrange= 'D:\360Downloads\category.txt'
-  ;openW,lun,arrange,/GET_LUN
   PRINTF,lun,'\n2.this is category one\n'
   PRINTF,lun,format='(5(g,:,","))',category
-  ;FREE_LUN,lun
-  ;所有有效的亚类
-  ;last= 'D:\360Downloads\available.txt'
-  ;openW,lun,last,/GET_LUN
-  PRINTF,lun,'\n3.this is available one\t'
-  f=strcompress('('+String(numsOfSec)+'(i,:,","))',/REMOVE_ALL)
-  PRINTF,lun,format=f,available;'(15(i,:,","))'
-  ;FREE_LUN,lun
 
-  ;op='D:\360Downloads\op.txt'
-  ;openW,lun,op,/GET_LUN
+
+  PRINTF,lun,'\n3.this is available one\t'
+  f=strcompress('('+String(numsOfSec+1)+'(i,:,","))',/REMOVE_ALL)
+  PRINTF,lun,format=f,available;'(15(i,:,","))'
+
+
   PRINTF,lun,'\n4.this is return one\t','core(mean)'
   f=strcompress('('+String(fix(nb-1))+'(g,:,","))',/REMOVE_ALL)
   PRINTF,lun,format=f,core;'(7(g,:,","))'
-  printf,lun,[],'extent(min-max)'
+
+  printf,lun,'\n5.extent(min-max)'
   PRINTF,lun,format=f,extent
-  printf,lun,[],'std'
+
+  printf,lun,'\n6.std'
   PRINTF,lun,format=f,std
+
   FREE_LUN,lun
   print,"statistic's over"
 end
 
 ;+
 ; :file turn to matirx:
-;
+; classes:大类数目、类别数目
+; numOfSec：度，最大的亚类数
 ;-
 function fileToMat,logfile,category,classes,numsOfSec
   compile_opt idl2
@@ -192,6 +204,12 @@ Function StringToDoubleArray,DblStr,DoubleArray,Count,pos
     LineSize=UINDGEN(nn)
     ;------------------------------------
     for n=0L,nn-1 DO BEGIN
+      ;先去掉首尾空格
+      Si[n] = STRTRIM(Si[n],2)
+      if Si[n] eq '-NaN' or Si[n] eq 'NaN' then begin
+        print,Si[n]
+        Si[n]='0.0'
+      endif
       valid=IsDoubleString(Si[n])
       if (valid GT 0) then begin
         DoubleValue[n]=fix(Si[n],type=5)
@@ -241,11 +259,10 @@ END
 ;以下识别正确的话,肯定可以使用:
 ;IDL>DoubleValue=fix(dblstr,type=5)转换为double数字
 
-function IsDoubleString,dblstr
+function IsDoubleString,str
   ;--------------------------------------------------------------
   Status=1;假设可以转换
-  ;先去掉首尾空格
-  str = STRTRIM(dblstr,2)
+
   ;---------------------------------------------
   ;查找并去掉末尾的非法字符
   pos = STREGEX(str, '([^0-9.eE+-]|[+-.][Ee]|[eE].)')
