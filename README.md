@@ -9,4 +9,4 @@ on the whole, it's a process about machine learning.
 
 # which situation does it suitable
 this work is prepare for wetlands mapping updating.
-It's a very changeable object, so this work may be a good option when those idea which need pick sample carefully 
+It's a very changeable object, so this work may be a good option when those idea which need pick sample carefully don't meet your demands.
