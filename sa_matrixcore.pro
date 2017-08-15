@@ -6,15 +6,15 @@
 ;有价值的暂时为sa_matrixCore
 ;-
 ;
-pro sa_matrixCore,hardCore,SIDmatrix;realloc,
+pro sa_matrixCore,hardCore,SIDmatrix,baseFile;realloc,
   compile_opt IDL2
   ;  RESOLVE_ROUTINE, ['relocate','cluster'],$
   ;    /IS_FUNCTION, /NO_RECOMPILE
   ;hardCore=hardCore[0:3,*]
   if hardCore eq !NULL then setbackCore,logFile,reSave,hardCore
-  out_name = 'D:\360Downloads\June\testimg1.tif';这俩是sid算法的输出项，临时之用
+  out_name = baseFile+'sa_testimg.tif';这俩是sid算法的输出项，临时之用
   ;ruleName = 'D:\360Downloads\June\testRule.tif'
-  reSave= 'D:\360Downloads\June\matrix.txt'
+  reSave= baseFile+'sa_matrix.txt'
   ;  envi_doit, 'class_doit', fid=fid, pos=0, dims=dims, $
   ;    out_bname='SID', out_name=out_name, method=3, $
   ;    mean=mean, r_fid=r_fid,rule_out_name=ruleName, $

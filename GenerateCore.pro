@@ -222,6 +222,27 @@ function modeH,hist,dmax,dmin
 end
 
 
+
+;+
+; :Description:
+;统计，computer statisics。envi中的函数，计算Bit 0 (COMP_FLAG=1):
+; Enables the calculation of maximum, minimum, mean, and standard deviation
+; 然后将相关参数送到isodata中去
+;-
+function statForIso,fid,mfid
+  compile_opt idl2
+  ;envi_open_file,file, r_fid=fid
+  envi_file_query,fid,nb=nb,dims=dims
+  ;pos=[0,1]
+  envi_doit, 'envi_stats_doit', dims=dims, fid=fid, pos=indgen(nb), $
+    M_FID=mfid, M_POS=[0],comp_flag=1, stdv=stdv
+
+  print,'ok'
+  return, max(stdv)/30.0
+end
+
+
+
 ;+
 ; :isodata分类:
 ;
@@ -230,13 +251,14 @@ function isodata,fid,M_fid, NUM_CLASSES
   compile_opt idl2
   envi_file_query,fid,dims=dims,nb=nb
   ;isodata的参数
+  STD=statForIso(fid,M_fid)
   if NUM_CLASSES eq !NULL then NUM_CLASSES = 15
   MIN_CLASSES = 2;由sj46调用时，min_classes设置为3或者1都会报错。可能应为sj46传过来的最小是2的原因？
   ITERATIONS = 10
   CHANGE_THRESH = 0.05
   ISO_MIN_PIXELS = 1000
-  ISO_SPLIT_STD = .0100
-  ISO_MERGE_DIST = 0.0050
+  ISO_SPLIT_STD = STD;.0100
+  ISO_MERGE_DIST = STD/2;0.0050
   ;ISO_SPLIT_SMULT = 1
 
   ISO_MERGE_PAIRS = 2

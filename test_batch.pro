@@ -5,7 +5,7 @@
 ; classFile是最后的分类图像
 ; partial -- 用来确定全部保留0还是保留部分1
 ;-,path,logFile,reSave,IsPartial,classFile
-pro test_batch,path,logFile,reSave,IsPartial,classFile;,IsPartial,classFile
+pro test_batch,path,logFile,reSave,IsPartial,classFile,baseFile;,IsPartial,classFile
   ;  COMPILE_OPT IDL2
   ;  ENVI,/RESTORE_BASE_SAVE_FILES
   ;  ENVI_BATCH_INIT
@@ -73,8 +73,9 @@ pro test_batch,path,logFile,reSave,IsPartial,classFile;,IsPartial,classFile
   t=[]
   foreach temp,teamCore do begin ;t=[t,temp]
     ;防止分4块时，有些只在一块中出现
-    if N_elements(temp) gt 1 then sa_matrixCore,core[*,temp],matrix;matrix是相关矩阵，越小越相近core[*,t],
+    if N_elements(temp) gt 1 then sa_matrixCore,core[*,temp],matrix,baseFile;matrix是相关矩阵，越小越相近core[*,t],
     if N_elements(temp) eq 1 then matrix=intarr(1)
+    if N_elements(temp) eq 0 then continue
     ;print,size(t)
     ;print,size(matrix);确认一下它是不是矩阵
     s=(size(matrix))[1]

@@ -73,30 +73,3 @@ function minDis,fid,M_fid,hardCore
 
   return, 1
 end
-;+
-; :最小值分类:
-;暂时不用。
-;现在用来将分类结果图，转成envi的分类图
-;-
-function miniDistance,file
-  compile_opt idl2
-  ;minmum distance
-  envi_open_file, file, r_fid=fid
-  envi_file_query,fid,nb=nb,dims=dims
-  maskClass = envi_get_data(fid=fid,dims=dims,pos=0)
-  classNUMs=numsClass(maskClass)
-  maskClass=[]
-
-  fileName= STRMID(file,0,STRPOS(file,'.'))
-  outputfile= fileName+'_class.tif'
-
-  envi_doit, 'class_doit', fid=fid, pos=indgen(nb),$
-    dims=dims, r_fid=r_fid, $
-    out_bname='min', method=2, out_name=outputfile, $;
-    mean=transpose(classNUMs), class_names=indgen(classNUMs), $
-    ;lookup= bytarr(3,SN+1), in_memory=0
-    lookup= byte(randomu(1,[3,classNUMs])*255), in_memory=0;,$
-  ;
-
-  return, 1
-end
