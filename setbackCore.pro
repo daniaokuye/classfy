@@ -7,11 +7,11 @@
 ;core -- 影像各聚类中心组成波谱曲线;extent -- [min,max]
 ;alist -- 创建available的序列列表 0,1,2,3,4……
 ;alist -- 2107/6/13-alist的第一个数字变成大类了，如1000，1001
-;partial -- 用来确定全部保留还是保留部分
+;partial -- 用来确定全部保留0还是保留部分1
 ;-
 pro setbackCore,core,std,extent,alist,IsPartial,logFile,reSave
   compile_opt IDL2
-  if logFile eq !NULL then logFile = 'D:\360Downloads\June\log2.txt'
+  if logFile eq !NULL then logFile = 'D:\360Downloads\June25\Log_1.txt'
   if reSave eq !NULL then  reSave= 'D:\360Downloads\June\FileData2.txt'
   if IsPartial eq !NULL then IsPartial=1
   FileData=fileToMat(logFile,category,classes,numsOfSec)
@@ -36,8 +36,8 @@ pro setbackCore,core,std,extent,alist,IsPartial,logFile,reSave
     leaves=where(keep[1,*] gt 0.5);暂定0.5
     available[0:leaves[-1],i]=keep[0,0:leaves[-1]];多一列keep[0]保存着大类代号
   endfor
-  ;  useful=where(available[0,*] gt 0);意欲去掉0大类，影像空值也需要保留一类的
-  ;  available=available[*,useful]
+  useful=where(available[0,*] gt -1);意欲去掉无值的类
+  available=available[*,useful]
 
   nb=category[-1,1]-category[-1,0];波段数目nb
 
@@ -59,7 +59,7 @@ pro setbackCore,core,std,extent,alist,IsPartial,logFile,reSave
 
   ;创建available的序列列表 0,1,2,3,4……
   alist=list()
-  number=1
+  number=0
   for i=0,(size(available))[2]-1 do begin
     av=where(available[*,i] gt -1,count)
     ;if count then begin

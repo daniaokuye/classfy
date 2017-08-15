@@ -13,7 +13,7 @@ pro sa_matrixCore,hardCore,SIDmatrix;realloc,
   ;hardCore=hardCore[0:3,*]
   if hardCore eq !NULL then setbackCore,logFile,reSave,hardCore
   out_name = 'D:\360Downloads\June\testimg1.tif';这俩是sid算法的输出项，临时之用
-  ruleName = 'D:\360Downloads\June\testRule.tif'
+  ;ruleName = 'D:\360Downloads\June\testRule.tif'
   reSave= 'D:\360Downloads\June\matrix.txt'
   ;  envi_doit, 'class_doit', fid=fid, pos=0, dims=dims, $
   ;    out_bname='SID', out_name=out_name, method=3, $
@@ -54,17 +54,17 @@ pro sa_matrixCore,hardCore,SIDmatrix;realloc,
   fid = ENVIRasterToFID(newRaster)
   envi_file_query,fid,nl=nl,ns=ns,nb=nb,dims=dims
   ;thresh=replicate(0.5,num_classes)
-  
+
   ;method is a classifiction method-SAM. spectral angle match
   envi_doit, 'class_doit', fid=fid, pos=indgen(nb),$
     dims=[-1,0,line-1,0,line-1], $
-    out_bname='SID', method=3, out_name=out_name, $;
+    out_bname='SID', method=3, r_fid=ofid, out_name=out_name,$;
     mean=hardCore, rule_fid=r_fid,class_names=indgen(line+1), $;
     ;lookup= bytarr(3,line+1),  $,rule_out_name=ruleName
     lookup= byte(randomu(1,[3,line+1])*255),rule_in_memory=1;, thresh=thresh
-    ;注意：rule_out_name和rule_in_memory都设置的情况下，谁在前谁优先，互相冲突
-    
-    
+  ;注意：rule_out_name和rule_in_memory都设置的情况下，谁在前谁优先，互相冲突
+
+
   SIDmatrix=list()
   envi_file_query, r_fid, nl=nl,ns=ns, nb=nb
   for i=0,nb-1 do begin
@@ -96,7 +96,13 @@ pro sa_matrixCore,hardCore,SIDmatrix;realloc,
   FILE_DELETE, tempFile
 
   FREE_LUN,lun
-  print,'ok'
+
+  ;移除r_fid
+  foreach iFid,[ofid,r_fid] do begin
+    raster = ENVIFIDToRaster(iFid)
+    raster.close
+  endforeach
+  print,'matrixCore is over'
 
 end
 

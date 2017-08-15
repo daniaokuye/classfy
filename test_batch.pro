@@ -3,8 +3,9 @@
 ; IsPartial取值[0,1]，0值即在setbackCore中为全保留，否则1为参考面积保留
 ; 在test_batch中，意思是同一类的不可取相似。
 ; classFile是最后的分类图像
-;-
-pro test_batch,logFile,reSave,IsPartial,classFile
+; partial -- 用来确定全部保留0还是保留部分1
+;-,path,logFile,reSave,IsPartial,classFile
+pro test_batch,path,logFile,reSave,IsPartial,classFile;,IsPartial,classFile
   ;  COMPILE_OPT IDL2
   ;  ENVI,/RESTORE_BASE_SAVE_FILES
   ;  ENVI_BATCH_INIT
@@ -47,6 +48,7 @@ pro test_batch,logFile,reSave,IsPartial,classFile
     startAlist++
     sameClass.add,tempList
   endforeach
+
   ;print,'sameClass',sameClass
   ;----------------teamCore------------------------
   ;sameClass=sameClass[0:1]
@@ -69,52 +71,55 @@ pro test_batch,logFile,reSave,IsPartial,classFile
   ;+++++++++++++++++++++++++++++++{--
   ;foreach t,teamCore do begin
   t=[]
-  foreach temp,teamCore do t=[t,temp]
+  foreach temp,teamCore do begin ;t=[t,temp]
+    ;防止分4块时，有些只在一块中出现
+    if N_elements(temp) gt 1 then sa_matrixCore,core[*,temp],matrix;matrix是相关矩阵，越小越相近core[*,t],
+    if N_elements(temp) eq 1 then matrix=intarr(1)
+    ;print,size(t)
+    ;print,size(matrix);确认一下它是不是矩阵
+    s=(size(matrix))[1]
+    ;sample=s;行列数相同
 
-  sa_matrixCore,core[*,t],matrix;matrix是相关矩阵，越小越相近
-  ;print,size(t)
-  ;print,size(matrix);确认一下它是不是矩阵
-  s=(size(matrix))[1]
-  ;sample=s;行列数相同
+    ;用来保存matrix中相似的代号，以便生成核心时用到
+    coreList=list()
+    full=[]
+    for i=0,s-1 do begin
+      if total(i eq full) ge 1 then continue
+      coreN=where(matrix[*,i] lt 0.05,count);cos or sam,0 is the most similar one
 
-  ;用来保存matrix中相似的代号，以便生成核心时用到
-  coreList=list()
-  full=[]
-  for i=0,s-1 do begin
-    if total(i eq full) ge 1 then continue
-    coreN=where(matrix[*,i] lt 0.1,count);cos or sam,0 is the most similar one
+      ;去掉coreN中已经存在full中的系数
+      tempCN=[]
+      foreach c,coreN do begin
+        if total(c eq full) ge 1 then continue
+        tempCN=[tempCN,c]
+      endforeach
+      coreN=tempCN
 
-    ;去掉coreN中已经存在full中的系数
-    tempCN=[]
-    foreach c,coreN do begin
-      if total(c eq full) ge 1 then continue
-      tempCN=[tempCN,c]
+      if count ne 0 then begin
+        full=[full,coreN]
+        ;对coreN排序，最好能按相识度差异大小抽选??
+        coreList.add,coreN
+        full=full[sort(full)];full为列号集合，满序为indgen（s），现在排序
+        full=full[uniq(full)];取唯一值
+      endif
+      if n_elements(full) eq s then break
+    endfor
+    ;print,'coreList',coreList,'over'
+    ;---
+    ;获得相似的核心，先暂时使用随机抽取吧
+    ;使用双层list，方便确认大类
+    innerList=list()
+    foreach coreN,coreList do begin
+      innerList.add,temp[coreN]
     endforeach
-    coreN=tempCN
-
-    if count ne 0 then begin
-      full=[full,coreN]
-      ;对coreN排序，最好能按相识度差异大小抽选??
-      coreList.add,coreN
-      full=full[sort(full)];full为列号集合，满序为indgen（s），现在排序
-      full=full[uniq(full)];取唯一值
-    endif
-    if (size(full))[1] eq s then break
-  endfor
-  ;print,'coreList',coreList,'over'
-  ;---
-  ;获得相似的核心，先暂时使用随机抽取吧
-  ;使用双层list，方便确认大类
-  innerList=list()
-  foreach coreN,coreList do begin
-    innerList.add,t[coreN]
-  endforeach
-  outterList.add,innerList
-  ;endforeach
+    outterList.add,innerList
+  endforeach;teamCore
   ;;+++++++++++++++++++++++++++++++--}
   ;print,'outterList',outterList
 
   ;对是否是IsPartial处理
+  ;目的是，一、属于alist同一行的是对上次循环该聚类做的必要的分解，所以不能作为相似类
+  ;二、alist的单独一类的，是它本身不能做有效区分的，需要保留和它相似的。
   if IsPartial eq 0 then begin
     OL_Index=0;用来表示outterList当前所在项
     foreach OL,outterList do begin;outterList
@@ -134,11 +139,13 @@ pro test_batch,logFile,reSave,IsPartial,classFile
         for i=0,n_elements(IL)-1 do begin;targets of IL
           al_Index=0;al对应系数
           foreach AL,alist do begin;scan AL
-            ;AL[0]是大类号
+            ;AL[0]是大类号,IL[i]是一个数，所以total取值[0,1]
             if total(IL[i] eq AL[1:-1]) then begin
+              ;对alist中单独类进行标记-1，这种情况下只有两个，它本身和-1
+              if n_elements(AL[1:-1]) eq 1 then divide[al_Index]=[divide[al_Index],-1]
               ;这样，属于同一alist中类的将以IL系数的形式，列在divide列表中（list）
               divide[al_Index]=[divide[al_Index],IL[i]]
-              break;找到了就确定下一个
+              break;找到了就去确定下一个
             endif
             al_Index++
           endforeach;scan AL
@@ -146,12 +153,17 @@ pro test_batch,logFile,reSave,IsPartial,classFile
         ;至此，此IL中所有的项都做了相应归并，需要对divide做处理了
         ;newIL=list()
         jump=0;tempList需要增长的长度
+        tempSolo=[];保存单独项，等divide中其他项所有做完后另行处理
         foreach DL,divide do begin;DL
           if DL eq [] then continue;为空则跳过
           ;如果只有一项直接添加当前列表中
           if n_elements(DL) eq 1 then tempList[IL_Index]=[tempList[IL_Index],DL]
           if n_elements(DL) gt 1 then begin
             ;如果有多项，第一项加入当前列表，其余项顺次添加
+            if DL[0] eq -1 then begin
+              tempSolo=[tempSolo,DL[1]]
+              continue;作为else使用
+            endif
             tempList[IL_Index]=[tempList[IL_Index],DL[0]]
             for i=1,n_elements(DL)-1 do begin
               tempList.add,[DL[i]]
@@ -159,6 +171,25 @@ pro test_batch,logFile,reSave,IsPartial,classFile
             endfor
           endif
         endforeach;DL
+        ;处理solo中的独项,如果jump不为0，说明已有正常项进入n_elements(tempSolo) gt 0
+        ;if n_elements(tempSolo) eq 2 then print,'ol'
+        if n_elements(tempSolo) gt 0 then begin
+          if n_elements(tempList[IL_Index]) eq 0 then begin
+            tempList[IL_Index]=[tempList[IL_Index],tempSolo[0]]
+            for i=1,n_elements(tempSolo)-1 do begin
+              tempList.add,[tempSolo[i]]
+              jump++
+            endfor
+          endif
+          if n_elements(tempList[IL_Index]) gt 0 then begin
+            IL_Index+=jump;只将tempList加到当前值,涉及到
+            jump=0
+            for i=0,n_elements(tempSolo)-1 do begin
+              tempList.add,[tempSolo[i]]
+              jump++
+            endfor
+          endif
+        endif;处理solo中的独项
         IL_Index+=(jump+1)
       endforeach;OL-->innerlist;IL-->里面的列表
       outterList[OL_Index]=tempList
@@ -172,6 +203,9 @@ pro test_batch,logFile,reSave,IsPartial,classFile
   ;每次根据相似程度，对有相似类别的聚类做随机更换，共迭代totaltime次
   totalTime=1;5
   ruleFileList=[];个数为totalTime
+  print,'test_batch:alist:'
+  print,alist,'outterList'
+  foreach oi,outterList do print, oi,'*******'
   for times=1,totalTime do begin;6times
     ;对每一大类(class)中相同聚类(cluster)取随机一个，非相同聚类汇成此大类的核，此核用于分类
     ;然后做一个循环
@@ -181,19 +215,29 @@ pro test_batch,logFile,reSave,IsPartial,classFile
       i=0
       foreach clus,cls do begin;大类下相同聚类
         nums = N_Elements(clus);randomu创建[0,nums)的浮点数
-        sub = clus[FIX(nums * RANDOMU(var, 1))];得到[0,nums-1]的整数
-        hardcore=[[hardcore],[sub]];core[*,sub]
+        Nrom=max([nums/5,1])
+        ;得到[0,nums-1]的整数，var是随机种子，nums加上fix得到取值范围，最后整数是个数。
+        sub=FIX(nums * RANDOMU(var, Nrom))
+        sub=sub[sort(sub)]
+        sub=sub[uniq(sub)]
+        sub = clus[sub]
+        hardcore=[hardcore,sub];core[*,sub]
         i++
       endforeach
       clsNums=[clsNums,i]
     endforeach
 
-    print,hardcore,'size',size(hardcore)
+    print,'hardcore',hardcore,' size of hardcore:',size(hardcore)
+    cols=(size(core))[1]
+    f=strcompress('('+String(fix(cols))+'(g,:,","))',/REMOVE_ALL)
+    PRINT,'the core before SAM:'
+    print,format=f,core[*,hardCore]
+
     ;此时hardcore的维度是一样的，即类别数一样，用它作为分类中心，调用sam方法，得到一个rule影像
     ;rule影像维度和hardcore一样
-    sa_readDBF,core[*,hardCore],class_name,ruleName;调用Sam分类方法
+    sa_readDBF,path,core[*,hardCore],class_name,ruleName;调用Sam分类方法
     ruleFileList=[ruleFileList,ruleName]
-    print,'over'
+
   endfor
   ;----------------------------------------
   ;将每一类的影像取最小值
@@ -202,8 +246,18 @@ pro test_batch,logFile,reSave,IsPartial,classFile
   endif else begin
     classFile=class_name
   endelse
-
-
+  ;移除rulefileList
+  foreach file,ruleFileList do begin
+    envi_open_file, file, r_fid=i_fid
+    catch,error_status
+    ;如果发生不能转出fid的错误，就跳过
+    if error_status ne 0 then begin
+      catch,/cancel
+      continue
+    endif
+    ok=deleteFID(i_fid)
+  endforeach
+  print,'test_batch: over'
 end
 
 
@@ -254,9 +308,11 @@ function minify,fileList
     envi_file_query,fid,nl=nl,ns=ns,nb=nb,dims=dims
     ruleImg =[ [ruleImg],[envi_get_data(fid=fid,dims=dims,pos=band)]]
     if (size(ruleImg))[0] eq 3 then begin
-
       ruleImg=min(ruleImg, DIMENSION=3);
     endif
+    ;关闭这个fid
+    raster = ENVIFIDToRaster(fid)
+    raster.close
   endfor
 
 

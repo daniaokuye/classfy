@@ -5,7 +5,7 @@
 ;blocks用来控制分区，每幅图生成4个分区，分别计算他们的统计结果
 ;clusterList用来保存聚类号和对应的临时文件，用于取hist直方图和delete
 ;
-PRO GenerateCore,blocks,maskFile,logFile,abandon;,clusterList
+PRO GenerateCore,blocks,path,maskFile,logFile,abandon;,clusterList
   if path eq !NULL then path = 'F:\Data\test\L028_Index.tif'
   if maskFile eq !NULL then maskFile='F:\Data\IsoCopy\tpCode.tif'
   if logFile eq !NULL then logFile = 'D:\360Downloads\June\log1.txt'
@@ -43,7 +43,7 @@ PRO GenerateCore,blocks,maskFile,logFile,abandon;,clusterList
   nameString=[]
   ;for blocks=1,4 do begin
   ;blocks用来控制分区，每幅图生成4个分区，分别计算他们的统计结果
-  for i=0,N_ELEMENTS(classNUMs)-1 do begin
+  for i=0,N_ELEMENTS(classNUMs)-1 do begin;-----------for
     ;openU,lun,logFile,/GET_LUN
 
     ;如果i大于类的总数，开始计算影像中未被分类的ISOData特征；
@@ -112,10 +112,16 @@ IsSaveLog = staticClass(isoFid,zzfid,lun)
 DELfid=[Mskfid,isoFid];[fid,rFid]
 ok=deleteFID(DELfid);先删掉掩膜临时文件
 print,'ok-1'
-endfor
-;endfor
+endfor;endfor
+
 
 FREE_LUN,lun
+;要关掉打开的影像文件
+foreach i_fid,[mfid,zzfid] do begin
+  raster = ENVIFIDToRaster(i_fid)
+  raster.close
+endforeach
+
 ;raster = data*mask
 ;isodataFile = isodata(mask*temporary(envi_get_data(fid=zzfid,dims=dims,pos=0)))
 ;delvar,raster
@@ -225,11 +231,11 @@ function isodata,fid,M_fid, NUM_CLASSES
   envi_file_query,fid,dims=dims,nb=nb
   ;isodata的参数
   if NUM_CLASSES eq !NULL then NUM_CLASSES = 15
-  MIN_CLASSES = 3
+  MIN_CLASSES = 2;由sj46调用时，min_classes设置为3或者1都会报错。可能应为sj46传过来的最小是2的原因？
   ITERATIONS = 10
-  CHANGE_THRESH = .05
+  CHANGE_THRESH = 0.05
   ISO_MIN_PIXELS = 1000
-  ISO_SPLIT_STD = 0.010
+  ISO_SPLIT_STD = .0100
   ISO_MERGE_DIST = 0.0050
   ;ISO_SPLIT_SMULT = 1
 
@@ -271,15 +277,17 @@ end
 ;-
 function deleteFID,fid
   for i=0,N_ELEMENTS(fid)-1 do begin
-    raster = ENVIFIDToRaster(fid[i])
-    path=raster.uri
-    raster.close
-    r_Pos = STRPOS(path,'.dat')
-    fileName= STRMID(path,0,r_Pos)+'*'
-    image_files=file_search(fileName,count=numfiles)
-    for k=0,numfiles-1 do begin
-      FILE_DELETE, image_files[k]
-    endfor
+    if fid[i] ne -1 then begin;删除有效的fid
+      raster = ENVIFIDToRaster(fid[i])
+      path=raster.uri
+      raster.close
+      r_Pos = STRPOS(path,'.dat')
+      fileName= STRMID(path,0,r_Pos)+'*'
+      image_files=file_search(fileName,count=numfiles)
+      for k=0,numfiles-1 do begin
+        FILE_DELETE, image_files[k]
+      endfor
+    endif
   endfor
   return, 1
 end
