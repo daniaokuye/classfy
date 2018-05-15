@@ -21,8 +21,8 @@ this process can work in IDL8.3 with opening of ENVI.
 
 
 # which situation does it suitable
-this work is prepare for wetlands mapping updating.
-It's a very changeable object, so this work may be a good option when those idea which need pick sample carefully don't meet your demands.
+this work is prepare for wetlands mapping updating.  
+It's a very dynamic object, so this work may be a good option when those need pick sample carefully withou labor involving in it.
 
 # experience data  
 some available data will be presented laterly.
